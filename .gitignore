@@ -42,7 +42,7 @@ Thumbs.db
 *.temp
 
 # Agent-generated project
-customer_app/
+#customer_app/
 customer_app2/
 
 tests/
