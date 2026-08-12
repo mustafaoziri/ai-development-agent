@@ -13,9 +13,14 @@ from tools import (
 from prompts import SYSTEM_PROMPT
 
 
+# Groq API üzerinden OpenAI-compatible client
 client = OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY")
+    api_key=os.environ.get("GROQ_API_KEY"),
+    base_url="https://api.groq.com/openai/v1"
 )
+
+
+MODEL = "openai/gpt-oss-20b"
 
 
 TOOLS = [
@@ -105,11 +110,23 @@ def run_agent(requirements):
 
     print("\n=== CODING AGENT STARTED ===\n")
 
+    # Groq Responses API previous_response_id desteklemediği için
+    # conversation history'yi kendimiz tutuyoruz.
+    conversation = [
+        {
+            "role": "user",
+            "content": requirements
+        }
+    ]
+
     response = client.responses.create(
-        model="openai/gpt-oss-120b",
+        model=MODEL,
         instructions=SYSTEM_PROMPT,
-        input=requirements,
-        tools=TOOLS
+        input=conversation,
+        tools=TOOLS,
+        reasoning={
+            "effort": "medium"
+        }
     )
 
     while True:
@@ -122,7 +139,6 @@ def run_agent(requirements):
                 continue
 
             name = item.name
-
             arguments = json.loads(item.arguments)
 
             print(f"[TOOL] {name}")
@@ -141,14 +157,25 @@ def run_agent(requirements):
                 }
             )
 
+        # Model herhangi bir tool çağırmadıysa iş bitmiştir.
         if not tool_outputs:
             break
 
+        # Önce modelin önceki output'unu conversation'a ekle.
+        conversation.extend(response.output)
+
+        # Daha sonra tool sonuçlarını ekle.
+        conversation.extend(tool_outputs)
+
+        # Yeni request
         response = client.responses.create(
-            model="openai/gpt-oss-120b",
-            previous_response_id=response.id,
-            input=tool_outputs,
-            tools=TOOLS
+            model=MODEL,
+            instructions=SYSTEM_PROMPT,
+            input=conversation,
+            tools=TOOLS,
+            reasoning={
+                "effort": "medium"
+            }
         )
 
     print("\n=== CODING AGENT FINISHED ===\n")
